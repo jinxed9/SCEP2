@@ -5,7 +5,7 @@ import numpy as np
 import cv2
 import os
 import glob
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 from render import renderVideoFFMPEG
 
 
@@ -280,8 +280,37 @@ def find_lane_pixels(binary_warped):
 
     return leftx, lefty, rightx, righty, out_img
 
+def measure_curvature_pixels(ploty, left_fit, right_fit):
+    # Define y-value where we want radius of curvature
+    # We'll choose the maximum y-value, corresponding to the bottom of the image
+    y_eval = np.max(ploty)
+    
+    # Calculation of R_curve (radius of curvature)
+    left_curverad = ((1 + (2*left_fit[0]*y_eval + left_fit[1])**2)**1.5) / np.absolute(2*left_fit[0])
+    right_curverad = ((1 + (2*right_fit[0]*y_eval + right_fit[1])**2)**1.5) / np.absolute(2*right_fit[0])
+    
+    return left_curverad, right_curverad
 
-def fit_polynomial(binary_warped):
+def measure_curvature_real(ploty, left_fit_cr, right_fit_cr):
+    '''
+    Calculates the curvature of polynomial functions in meters.
+    '''
+    # Define conversions in x and y from pixels space to meters
+    ym_per_pix = 30/720 # meters per pixel in y dimension
+    xm_per_pix = 3.7/700 # meters per pixel in x dimension
+    
+    # Define y-value where we want radius of curvature
+    # We'll choose the maximum y-value, corresponding to the bottom of the image
+    y_eval = np.max(ploty)
+    
+    # Calculation of R_curve (radius of curvature)
+    left_curverad = ((1 + (2*left_fit_cr[0]*y_eval*ym_per_pix + left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
+    right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix + right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
+
+
+    return left_curverad, right_curverad
+
+def fit_polynomial(binary_warped, print_stages=False):
     # Find our lane pixels first
     leftx, lefty, rightx, righty, out_img = find_lane_pixels(binary_warped)
 
@@ -312,62 +341,79 @@ def fit_polynomial(binary_warped):
     ploty_int = ploty.astype(int)
 
     lines = np.zeros_like(out_img)
-    #lines[ploty_int, left_fitx_int] = [255, 255, 255]
-    #lines[ploty_int, right_fitx_int] = [255, 255, 255]
 
     pts_left = np.vstack((left_fitx_int,ploty_int)).T
     pts_right = np.vstack((right_fitx_int, ploty_int)).T
 
-    #pts_left_h= np.hstack((left_fitx_int,ploty_int)).T
-
-    pts2 = np.append(pts_left, np.flip(pts_right, axis=0), axis=0)
+    pts = np.append(pts_left, np.flip(pts_right, axis=0), axis=0)
     
-    # Generate top boundry for fill
-    top_leftx = left_fitx_int[0]
-    top_rightx = right_fitx_int[0]
-    bottom_leftx = left_fitx_int[719]
-    bottom_rightx = right_fitx_int[719]
-    
-
-    pts = [[bottom_leftx,719], [top_leftx,0], [top_rightx,0] ,[bottom_rightx,719]]
 
     # Draw the lane onto the warped blank image
-    cv2.fillPoly(lines, np.int_([pts2]), (0,255, 0))
+    cv2.fillPoly(lines, np.int_([pts]), (0,255, 0))
     cv2.polylines(lines, np.int_([pts_left]), False, (255, 0, 0), thickness=30)
     cv2.polylines(lines, np.int_([pts_right]), False, (0, 0, 255), thickness=30)
 
     #plt.imshow(lines)
     #plt.show()
     
-    # Plots the left and right polynomials on the lane lines
-    #plt.plot(left_fitx, ploty, color='yellow')
-    #plt.plot(right_fitx, ploty, color='yellow')
+    if print_stages:
+        # Plots the left and right polynomials on the lane lines
+        #plt.plot(left_fitx, ploty, color='yellow')
+        #plt.plot(right_fitx, ploty, color='yellow')
+        cv2.polylines(out_img, np.int_([pts_left]), False, (255, 255, 0), thickness=10)
+        cv2.polylines(out_img, np.int_([pts_right]), False, (255, 255, 0), thickness=10)
+        plt.imsave(".\\output_images\\test%d_top_down.jpg" % count,out_img,cmap='gray')
 
-    return lines
+
+    # Calculation of vehicle position
+    xm_per_pix = 3.7/700 # meters per pixel in x dimension
+    left_lane = left_fitx_int[719]
+    right_lane = right_fitx_int[719]
+    center = 1280/2
+    lane_position = (right_lane+left_lane)/2
+    vehicle_position = (lane_position-center) * xm_per_pix
+
+    #left_curverad, right_curverad = measure_curvature_pixels(ploty,left_fit, right_fit)
+    left_curverad, right_curverad = measure_curvature_real(ploty, left_fit, right_fit)
+    #print(left_curverad, right_curverad)
+    radius = (left_curverad+right_curverad)/2
+
+
+
+    return lines, radius, vehicle_position
 
 #----------------Do Lane Detection --------------
 
-def doLaneDetection(img):
+def doLaneDetection(img,print_stages=False):
 
     #TODO: make sure this works on white lanes
     # Thresholding
     color_binary = doThresholding(img)
+    if print_stages:
+        plt.imsave(".\\output_images\\test%d_color_binary.jpg" % count,color_binary,cmap='gray')
 
     # Perspective Transform
     top_down = warp(color_binary)
 
+
     #TODO: Add sliding window
     #TODO: Add low pass filter
     # Fit a Polynomial
-    out_img = fit_polynomial(top_down)
+    out_img, radius, position = fit_polynomial(top_down, print_stages)
 
     # Reverse Perspective Transform
     out_img = unwarp(out_img)
+
+    cv2.putText(out_img,"Radius: %0dm" %radius,(10,100),cv2.FONT_HERSHEY_SIMPLEX,2,(255,255,255),2,cv2.LINE_AA)
+    cv2.putText(out_img,"Vehicle is %2fm left of center" %position,(10,200),cv2.FONT_HERSHEY_SIMPLEX,2,(255,255,255),2,cv2.LINE_AA)
 
     #TODO: Add curvature and center position
     # Draw lanes on image
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     stacked = cv2.addWeighted(img, 1, out_img, 0.5, 0)
+
+    if print_stages:
+        cv2.imwrite(".\\output_images\\test%d_stacked.jpg" % count, cv2.cvtColor(stacked, cv2.COLOR_BGR2RGB))
 
     return stacked
 
@@ -380,9 +426,23 @@ images = glob.glob(r".\camera_cal\calibration*.jpg")
 mtx, dist = doCalibration(images)
 
 
-# Main loop
-images = glob.glob(r".\render\frame*.jpg")
+# Process Images
+images = glob.glob(r".\test_images\test*.jpg")
+count = 0
+for img in images:
+    count += 1
+    
+    #Undistort
+    img = cv2.imread(img)
+    undistorted = cv2.undistort(img,mtx, dist, None, mtx)
+    cv2.imwrite(".\\output_images\\test%d_undistorted.jpg" % count, undistorted)
+    print("Processing image %2d" % count, end='\r', flush=True)
+    processed = doLaneDetection(img,print_stages=True)    
 
+print("\nFinished Images")
+
+# Process Video
+images = glob.glob(r".\render\frame*.jpg")
 count = 0
 for img in images:
     count += 1
@@ -395,7 +455,7 @@ for img in images:
     img = cv2.undistort(img, mtx, dist, None, mtx)
 
     # Process
-    processed = doLaneDetection(img)
+    processed = doLaneDetection(img,print_stages=False)
     print("Processing frame %2d" % count, end='\r', flush=True)
 
     cv2.imwrite(".\\render\\frameOut%05d.jpg" % count, cv2.cvtColor(processed, cv2.COLOR_BGR2RGB))
