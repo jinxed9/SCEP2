@@ -8,6 +8,3 @@ import glob
 
 def renderVideoFFMPEG():
     os.system("ffmpeg -f image2 -r 25 -i ./render/frameOut%05d.jpg -vcodec mpeg4 -y ./output.mp4")
-
-
-renderVideoFFMPEG()

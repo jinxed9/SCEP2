@@ -6,21 +6,23 @@ import cv2
 import os
 import glob
 from PIL import Image, ImageDraw
+from render import renderVideoFFMPEG
 
 
 def doCalibration(images):
+    objPoints = [] #3D points in real world space
+    imgPoints = [] #2D points in image plane
+
     insideCornerCount = [(9,5),(9,6),(9,6),(9,6),(9,6),
                          (9,6),(9,6),(9,6),(9,6),(9,6),
                          (9,6),(9,6),(9,6),(9,6),(6,5),
                          (7,6),(9,6),(9,6),(9,6),(9,6)]
 
     for idx, fname in enumerate(images):
-        print(fname)
+        print(fname, end='\r', flush=True)
         img = cv2.imread(images[idx])
         # Convert to grayscale
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        # Find the chessboard corners
-        #print(insideCornerCount[idx])
         ret, corners = cv2.findChessboardCorners(gray, insideCornerCount[idx], None)
 
         nx = insideCornerCount[idx][0]
@@ -30,10 +32,10 @@ def doCalibration(images):
         objP[:,:2 ] = np.mgrid[0:nx,0:ny].T.reshape(-1,2) #x, y coordinates
 
         if ret == True:
-            #print("Corners found.")
             imgPoints.append(corners)
             objPoints.append(objP)
 
+    print('\n')
 
     #get calibration stuff
     ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objPoints, imgPoints, gray.shape[::-1], None, None)
@@ -65,9 +67,6 @@ def warp(img):
     # Compute the perspective transform, M
     M = cv2.getPerspectiveTransform(src, dst)
 
-    # Could compute the inverse also by swapping the input parameters
-    Minv = cv2.getPerspectiveTransform(dst, src)
-
     # Create warped image - uses linear interpolation
     warped = cv2.warpPerspective(img, M, img_size, flags=cv2.INTER_LINEAR)
 
@@ -94,9 +93,6 @@ def unwarp(img):
          [200, 0]]
     )
 
-    # Compute the perspective transform, M
-    M = cv2.getPerspectiveTransform(src, dst)
-
     # Could compute the inverse also by swapping the input parameters
     Minv = cv2.getPerspectiveTransform(dst, src)
 
@@ -120,31 +116,8 @@ def getFrame(frame):
             cv2.imwrite("frame%d.jpg" % count, image)
             break
 
-#----------------------------------------------------------------
-
-def doPerspectiveTransform(img):
-    return warp(img)
-
 #----------------- Begin Gradient ----------------------- 
 
-def abs_sobel_thresh(img, orient='x', thresh_min=0, thresh_max=255):
-    # Convert to grayscale
-    gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-    # Apply x or y gradient with the OpenCV Sobel() function
-    # and take the absolute value
-    if orient == 'x':
-        abs_sobel = np.absolute(cv2.Sobel(gray, cv2.CV_64F, 1, 0))
-    if orient == 'y':
-        abs_sobel = np.absolute(cv2.Sobel(gray, cv2.CV_64F, 0, 1))
-    # Rescale back to 8 bit integer
-    scaled_sobel = np.uint8(255*abs_sobel/np.max(abs_sobel))
-    # Create a copy and apply the threshold
-    binary_output = np.zeros_like(scaled_sobel)
-    # Here I'm using inclusive (>=, <=) thresholds, but exclusive is ok too
-    binary_output[(scaled_sobel >= thresh_min) & (scaled_sobel <= thresh_max)] = 1
-
-    # Return the result
-    return binary_output
 
 def mag_thresh(img, sobel_kernel=3, mag_thresh=(0, 255)):
     # Convert to grayscale
@@ -163,31 +136,7 @@ def mag_thresh(img, sobel_kernel=3, mag_thresh=(0, 255)):
 
 
     # Return the binary image
-    return binary_output
-
-
-def dir_threshold(img, sobel_kernel=3, thresh=(0, np.pi/2)):
-    # Grayscale
-    gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-    # Calculate the x and y gradients
-    sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=sobel_kernel)
-    sobely = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=sobel_kernel)
-    # Take the absolute value of the gradient direction, 
-    # apply a threshold, and create a binary image result
-    absgraddir = np.arctan2(np.absolute(sobely), np.absolute(sobelx))
-    binary_output =  np.zeros_like(absgraddir)
-    binary_output[(absgraddir >= thresh[0]) & (absgraddir <= thresh[1])] = 1
-
-    # Return the binary image
-    return binary_output
- #------------------- End Gradient -----------------------
-
-def hls_select(img, thresh=(0, 255)):
-    hls = cv2.cvtColor(img, cv2.COLOR_RGB2HLS)
-    s_channel = hls[:,:,2]
-    binary_output = np.zeros_like(s_channel)
-    binary_output[(s_channel > thresh[0]) & (s_channel <= thresh[1])] = 1
-    return binary_output    
+    return binary_output 
 
 #----------------- Thesholding -----------------------------------
 
@@ -368,19 +317,24 @@ def fit_polynomial(binary_warped):
 
     pts_left = np.vstack((left_fitx_int,ploty_int)).T
     pts_right = np.vstack((right_fitx_int, ploty_int)).T
+
+    #pts_left_h= np.hstack((left_fitx_int,ploty_int)).T
+
+    pts2 = np.append(pts_left, np.flip(pts_right, axis=0), axis=0)
     
     # Generate top boundry for fill
+    top_leftx = left_fitx_int[0]
+    top_rightx = right_fitx_int[0]
+    bottom_leftx = left_fitx_int[719]
+    bottom_rightx = right_fitx_int[719]
+    
 
+    pts = [[bottom_leftx,719], [top_leftx,0], [top_rightx,0] ,[bottom_rightx,719]]
 
-    pts = []
-    pts.append(pts_right)
-    pts.append(pts_left)
-    #pts.append(np.array(top))
-    #pts.append(bottom)
     # Draw the lane onto the warped blank image
-    #cv2.fillPoly(lines, np.array(pts,'int32'), (0,255, 0))
-    cv2.polylines(lines, np.int_([pts_left]), False, (255, 0, 0), thickness=20)
-    cv2.polylines(lines, np.int_([pts_right]), False, (0, 0, 255), thickness=20)
+    cv2.fillPoly(lines, np.int_([pts2]), (0,255, 0))
+    cv2.polylines(lines, np.int_([pts_left]), False, (255, 0, 0), thickness=30)
+    cv2.polylines(lines, np.int_([pts_right]), False, (0, 0, 255), thickness=30)
 
     #plt.imshow(lines)
     #plt.show()
@@ -394,21 +348,24 @@ def fit_polynomial(binary_warped):
 #----------------Do Lane Detection --------------
 
 def doLaneDetection(img):
-    img = cv2.imread(img)
 
-    # 1. Undistort
-    img = cv2.undistort(img, mtx, dist, None, mtx)
-
-    # 2. Thresholding
+    #TODO: make sure this works on white lanes
+    # Thresholding
     color_binary = doThresholding(img)
 
-    # 3. Perspective Transform
-    top_down = doPerspectiveTransform(color_binary)
+    # Perspective Transform
+    top_down = warp(color_binary)
 
-    # 5. Fit a Polynomial
+    #TODO: Add sliding window
+    #TODO: Add low pass filter
+    # Fit a Polynomial
     out_img = fit_polynomial(top_down)
+
+    # Reverse Perspective Transform
     out_img = unwarp(out_img)
 
+    #TODO: Add curvature and center position
+    # Draw lanes on image
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     stacked = cv2.addWeighted(img, 1, out_img, 0.5, 0)
 
@@ -417,11 +374,9 @@ def doLaneDetection(img):
 
 
 #--------------- Main ------------------------------
-# Steps:
-# 1. Do calibration (only need to do once)
+
+# Do calibration (only need to do once)
 images = glob.glob(r".\camera_cal\calibration*.jpg")    
-objPoints = [] #3D points in real world space
-imgPoints = [] #2D points in image plane
 mtx, dist = doCalibration(images)
 
 
@@ -430,12 +385,21 @@ images = glob.glob(r".\render\frame*.jpg")
 
 count = 0
 for img in images:
-    processed = doLaneDetection(img)
     count += 1
+    if count > 1252:
+        (print("\n# Finished #"))
+        break
+
+    # Undistort
+    img = cv2.imread(img)
+    img = cv2.undistort(img, mtx, dist, None, mtx)
+
+    # Process
+    processed = doLaneDetection(img)
+    print("Processing frame %2d" % count, end='\r', flush=True)
+
     cv2.imwrite(".\\render\\frameOut%05d.jpg" % count, cv2.cvtColor(processed, cv2.COLOR_BGR2RGB))
 
-
-# 6.    Once you've found lines, skip sliding window step
-# 7. Measure curvature 1. and 2
-# 8. Draw lines, use inverse perspective transform.
+# When finished, render video
+renderVideoFFMPEG()
 
