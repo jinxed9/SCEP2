@@ -15,7 +15,7 @@ def getAllFrames():
         ret, image = vidcap.read()
         count += 1
         print(count)
-        cv2.imwrite("output_images/frame%d.jpg" % count, image)
+        cv2.imwrite("render/frame%05d.jpg" % count, image)
 
 getAllFrames()
         
