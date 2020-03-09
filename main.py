@@ -7,40 +7,7 @@ import os
 import glob
 from PIL import Image, ImageDraw, ImageFont
 from render import renderVideoFFMPEG
-
-
-def doCalibration(images):
-    objPoints = [] #3D points in real world space
-    imgPoints = [] #2D points in image plane
-
-    insideCornerCount = [(9,5),(9,6),(9,6),(9,6),(9,6),
-                         (9,6),(9,6),(9,6),(9,6),(9,6),
-                         (9,6),(9,6),(9,6),(9,6),(6,5),
-                         (7,6),(9,6),(9,6),(9,6),(9,6)]
-
-    for idx, fname in enumerate(images):
-        print(fname, end='\r', flush=True)
-        img = cv2.imread(images[idx])
-        # Convert to grayscale
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        ret, corners = cv2.findChessboardCorners(gray, insideCornerCount[idx], None)
-
-        nx = insideCornerCount[idx][0]
-        ny = insideCornerCount[idx][1]
-
-        objP = np.zeros((nx*ny, 3), np.float32)
-        objP[:,:2 ] = np.mgrid[0:nx,0:ny].T.reshape(-1,2) #x, y coordinates
-
-        if ret == True:
-            imgPoints.append(corners)
-            objPoints.append(objP)
-
-    print('\n')
-
-    #get calibration stuff
-    ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objPoints, imgPoints, gray.shape[::-1], None, None)
-
-    return mtx, dist
+from calibration import doCalibration
 
 
 def warp(img):
@@ -421,6 +388,8 @@ def doLaneDetection(img,print_stages=False):
 
 #--------------- Main ------------------------------
 
+processVideo = True
+
 # Do calibration (only need to do once)
 images = glob.glob(r".\camera_cal\calibration*.jpg")    
 mtx, dist = doCalibration(images)
@@ -428,6 +397,8 @@ mtx, dist = doCalibration(images)
 
 # Process Images
 images = glob.glob(r".\test_images\test*.jpg")
+images.append(r".\test_images\straight_lines1.jpg")
+images.append(r".\test_images\straight_lines2.jpg")
 count = 0
 for img in images:
     count += 1
@@ -441,25 +412,27 @@ for img in images:
 
 print("\nFinished Images")
 
+
 # Process Video
-images = glob.glob(r".\render\frame*.jpg")
-count = 0
-for img in images:
-    count += 1
-    if count > 1252:
-        (print("\n# Finished #"))
-        break
+if processVideo:
+    images = glob.glob(r".\render\frame*.jpg")
+    count = 0
+    for img in images:
+        count += 1
+        if count > 1252:
+            (print("\n# Finished #"))
+            break
 
-    # Undistort
-    img = cv2.imread(img)
-    img = cv2.undistort(img, mtx, dist, None, mtx)
+        # Undistort
+        img = cv2.imread(img)
+        img = cv2.undistort(img, mtx, dist, None, mtx)
 
-    # Process
-    processed = doLaneDetection(img,print_stages=False)
-    print("Processing frame %2d" % count, end='\r', flush=True)
+        # Process
+        processed = doLaneDetection(img,print_stages=False)
+        print("Processing frame %2d" % count, end='\r', flush=True)
 
-    cv2.imwrite(".\\render\\frameOut%05d.jpg" % count, cv2.cvtColor(processed, cv2.COLOR_BGR2RGB))
+        cv2.imwrite(".\\render\\frameOut%05d.jpg" % count, cv2.cvtColor(processed, cv2.COLOR_BGR2RGB))
 
-# When finished, render video
-renderVideoFFMPEG()
+    # When finished, render video
+    renderVideoFFMPEG()
 
