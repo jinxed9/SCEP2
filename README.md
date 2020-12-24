@@ -34,7 +34,7 @@ When image and object points have been collected for each image, we pass them to
 
 To test our calibration, I applied the calibration matrix to a calibration image. The calibration matrix correctly undistorts the image as shown below.
 
-![Distorted_Cal_Image](./examples/undistorted_output.png)
+![Distorted_Cal_Image](./examples/undistort_output.png)
 
 The images in `test_images` are for testing your pipeline on single frames.  If you want to extract more test images from the videos, you can simply use an image writing method like `cv2.imwrite()`, i.e., you can read the video in frame by frame as usual, and for frames you want to save for later you can write to an image file.  
 
