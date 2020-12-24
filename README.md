@@ -40,13 +40,18 @@ Pipeline
 ---
 
 * Apply distortion correction
- - Distorted Image - 
+The first step in the pipeline is to apply distortion correction to each image. The matrix for this operation is calculated in the calibration step. Below is an example of a distorted image (before the undistort operation is applied)
 ![](./test_images/straight_lines1.jpg)
- - Undistorted Image - 
+And below is an exmaple of an undistorted image (after the undistort operation is applied). 
 ![](./output_images/test7_undistorted.jpg)
 
-
 * Use color transforms, gradients, etc., to create a thresholded binary image.
+Next we use do thresholding. This is handled by the doThresholding() function in main.py. 
+First we convert to HLS color space and separate the S channel. We then threshold the S channel. 
+Separately, we convert the same image to grayscale and apply the Sobel operator in the X direction to accentuate lines away from horizontal. We threshold this image as well.
+Then we combine the two binary thresholds. The output is as shown below:
+![](./output_images/test1_color_binary.jpg)
+
 * Apply a perspective transform to rectify binary image ("birds-eye view").
 * Detect lane pixels and fit to find the lane boundary.
 * Determine the curvature of the lane and vehicle position with respect to center.
