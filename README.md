@@ -53,19 +53,24 @@ Then we combine the two binary thresholds. The output is as shown below:
 ![](./output_images/test1_color_binary.jpg)
 
 * Apply a perspective transform to rectify binary image ("birds-eye view").
+The next step of our pipline is applying a perspective transform to our image. This gives us a birds-eye view of the road in front of us. We do this to make it easier to fit a polynomial to the lane lines. The perspective transform takes place in the warp() function in main.py. An visual example of the perspective transform is shown below:
+![](./examples/warped_straight_lines.jpg)
+
 * Detect lane pixels and fit to find the lane boundary.
+Next, we detect the lane pixels and fit a polynomial to each lane line. This is done in the fit_polynomial() function in main.py. First, we slide a window over the bottom row of pixels. Then we find the center of the lane lines by looking for the peak of a histogram. After the peak for the left and right lane line is found, we move our window up a row and repeat. We then fit a polynomial to the left and right rows respecitvely. The result is shown below:
+![](./output_images/test3_top_down.jpg)
+
 * Determine the curvature of the lane and vehicle position with respect to center.
+Once we have a polynomial fit to the lane lines, we can determine the curvature of the road and the vehicle position with respect to center. 
+The vehcle position is calculated by determining the horizontal location of the lane lines relative to the center of the image. 
+The curvature is calculated by averaging the radius of the right and left lane lines. 
+
 * Warp the detected lane boundaries back onto the original image.
+After the lane lines are detected, drawn on the image, and the vehicle position and lane curvature is calculated, we transform the perspective of the image back to "drivers view" with the unwarp() function.
+
 * Output visual display of the lane boundaries and numerical estimation of lane curvature and vehicle position.
 
-The images in `test_images` are for testing your pipeline on single frames.  If you want to extract more test images from the videos, you can simply use an image writing method like `cv2.imwrite()`, i.e., you can read the video in frame by frame as usual, and for frames you want to save for later you can write to an image file.  
+We then display the information visually as shown below:
+![](./output_images/test6_stacked.jpg)
 
-To help the reviewer examine your work, please save examples of the output from each stage of your pipeline in the folder called `output_images`, and include a description in your writeup for the project of what each image shows.    The video called `project_video.mp4` is the video your pipeline should work well on.  
-
-The `challenge_video.mp4` video is an extra (and optional) challenge for you if you want to test your pipeline under somewhat trickier conditions.  The `harder_challenge.mp4` video is another optional challenge and is brutal!
-
-If you're feeling ambitious (again, totally optional though), don't stop there!  We encourage you to go out and take video of your own, calibrate your camera and show us how you would implement this project from scratch!
-
-## How to write a README
-A well written README file can enhance your project and portfolio.  Develop your abilities to create professional README files by completing [this free course](https://www.udacity.com/course/writing-readmes--ud777).
 
