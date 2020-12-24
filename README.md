@@ -40,7 +40,9 @@ Pipeline
 ---
 
 * Apply distortion correction
-![](./test_images/straight_lines1.jpg) ![](./output_images/test6_undistorted.jpg)
+Distorted                              |  Undistorted
+:-------------------------------------:|:-----------------------------------------:
+![](./test_images/straight_lines1.jpg) | ![](./output_images/test6_undistorted.jpg)
 
 
 * Use color transforms, gradients, etc., to create a thresholded binary image.
